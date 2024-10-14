@@ -1,0 +1,75 @@
+// Function to detect Prebid.js TTL implementation
+function detectPrebidTTL() {
+    const OUTPUT_TITLE = "[PREBID-TTL-CHECK]";
+
+    function log(message) {
+        console.log(`${OUTPUT_TITLE} ${message}`);
+    }
+
+    // Check if Prebid.js is loaded
+    if (typeof pbjs === 'undefined') {
+        log("Prebid.js is not detected on this page.");
+        return;
+    }
+
+    log("Prebid.js detected. Version: " + pbjs.version);
+    log("Checking for TTL implementation...");
+
+    // Log current Prebid.js configuration
+    log("Current Prebid.js configuration:");
+    log(JSON.stringify(pbjs.getConfig(), null, 2));
+
+    // Function to check TTL of a bid
+    function checkBidTTL(bid) {
+        if (bid.ttl) {
+            log(`TTL detected for bid: ${bid.bidder}, AdUnit: ${bid.adUnitCode}, TTL: ${bid.ttl} seconds`);
+        } else {
+            log(`No TTL found for bid: ${bid.bidder}, AdUnit: ${bid.adUnitCode}`);
+        }
+    }
+
+    // Add event listeners for various Prebid events
+    pbjs.onEvent('auctionInit', function(data) {
+        log(`Auction initialized. Auction ID: ${data.auctionId}`);
+    });
+
+    pbjs.onEvent('bidRequested', function(data) {
+        log(`Bid requested from bidder: ${data.bidder}, Bid ID: ${data.bidId}`);
+    });
+
+    pbjs.onEvent('bidResponse', function(data) {
+        log(`Bid response received. Bidder: ${data.bidder}, CPM: ${data.cpm}, AdUnit: ${data.adUnitCode}`);
+        checkBidTTL(data);
+    });
+
+    pbjs.onEvent('auctionEnd', function(data) {
+        log(`Auction ended. Auction ID: ${data.auctionId}`);
+        log(`Total bids received: ${data.bidsReceived.length}`);
+        data.bidsReceived.forEach(checkBidTTL);
+    });
+
+    pbjs.onEvent('bidWon', function(data) {
+        log(`Bid won. Bidder: ${data.bidder}, AdUnit: ${data.adUnitCode}`);
+        checkBidTTL(data);
+    });
+
+    // Check if Prebid.js is actively removing expired bids
+    const originalRemoveExpiredBids = pbjs.removeExpiredBids;
+    pbjs.removeExpiredBids = function(adUnits) {
+        log("Prebid.js is actively removing expired bids.");
+        return originalRemoveExpiredBids.apply(this, arguments);
+    };
+
+    log("TTL detection script initialized. Monitoring for bid activities...");
+
+    // Trigger a bid request to initiate the process
+    pbjs.requestBids({
+        bidsBackHandler: function() {
+            log("Bid request completed.");
+        },
+        timeout: 5000 // 5 seconds timeout
+    });
+}
+
+// Run the detection
+detectPrebidTTL();
